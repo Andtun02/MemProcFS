@@ -7,6 +7,8 @@
 #define __MM_H__
 #include "../vmm.h"
 
+VOID Mmx64_SetPml4(_In_ ULONG64 qwA);
+
 /*
 * Initialize the X86 32-bit protected mode memory model.
 * -- H

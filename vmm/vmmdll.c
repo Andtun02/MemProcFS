@@ -826,6 +826,12 @@ BOOL VMMDLL_MemReadPage(_In_ VMM_HANDLE H, _In_ DWORD dwPID, _In_ ULONG64 qwA, _
 }
 
 _Success_(return)
+VOID VMMDLL_SetPml4(_In_ ULONG64 qwA)
+{
+    VmmSetPml4(qwA);
+}
+
+_Success_(return)
 BOOL VMMDLL_MemPrefetchPages_Impl(_In_ VMM_HANDLE H, _In_ DWORD dwPID, _In_reads_(cPrefetchAddresses) PULONG64 pPrefetchAddresses, _In_ DWORD cPrefetchAddresses)
 {
     DWORD i;

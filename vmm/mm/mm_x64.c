@@ -10,6 +10,13 @@
 #define MMX64_PTE_IS_TRANSITION(H, pte, iPML)       ((((pte & 0x0c01) == 0x0800) && (iPML == 1)) ? ((pte & 0xffffdffffffff000) | 0x005) : 0)
 #define MMX64_PTE_IS_VALID(pte, iPML)               (pte & 0x01)
 
+
+static uintptr_t* pml4;
+VOID Mmx64_SetPml4(_In_ ULONG64 qwA)
+{
+    pml4 = qwA;
+}
+
 /*
 * Tries to verify that a loaded page table is correct. If just a bit strange
 * bytes/ptes supplied in pb will be altered to look better.
@@ -225,34 +232,44 @@ VOID MmX64_Virt2PhysEx(_In_ VMM_HANDLE H, _In_ PVMM_V2P_ENTRY pV2Ps, _In_ DWORD 
     VmmTlbGetPageTableEx(H, pV2Ps, cV2Ps, FALSE);
     for(iV2P = 0; iV2P < cV2Ps; iV2P++) {
         pV2P = pV2Ps + iV2P;
-        pV2P->paPT = 0;
-        if(!pV2P->pObPTE) {
-            continue;
+
+        // set dtb
+        if (pV2P->paPT == 888 && pml4)
+        {
+            uintptr_t pml4Index = 0x1FF & (pV2P->va >> MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML]);
+            pte = pml4[pml4Index];
         }
-        if(pV2P->pa) {
-            Ob_DECREF_NULL(&pV2P->pObPTE);
-            continue;
-        }
-        i = 0x1ff & (pV2P->va >> MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML]);
-        pte = pV2P->pObPTE->pqw[i];
-        Ob_DECREF_NULL(&pV2P->pObPTE);
-        if(!MMX64_PTE_IS_VALID(pte, iPML)) {
-            if(iPML == 1) {
-                pV2P->pte = pte;
-                pV2P->fPaging = TRUE;
+        else
+        {
+            pV2P->paPT = 0;
+            if (!pV2P->pObPTE) {
+                continue;
             }
-            continue;
-        }
-        if(fUserOnly && !(pte & 0x04)) { continue; }            // SUPERVISOR PAGE & USER MODE REQ
-        if(pte & 0x000f000000000000) { continue; }              // RESERVED
-        if((iPML == 1) || (pte & 0x80) /* PS */) {
-            if(iPML == 4) { continue; }                         // NO SUPPORT IN PML4
-            qwMask = 0xffffffffffffffff << MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML];
-            pV2P->pa = pte & 0x0000fffffffff000 & qwMask;       // MASK AWAY BITS FOR 4kB/2MB/1GB PAGES
-            qwMask = qwMask ^ 0xffffffffffffffff;
-            pV2P->pa = pV2P->pa | (qwMask & pV2P->va);          // FILL LOWER ADDRESS BITS
-            pV2P->fPhys = TRUE;
-            continue;
+            if (pV2P->pa) {
+                Ob_DECREF_NULL(&pV2P->pObPTE);
+                continue;
+            }
+            i = 0x1ff & (pV2P->va >> MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML]);
+            pte = pV2P->pObPTE->pqw[i];
+            Ob_DECREF_NULL(&pV2P->pObPTE);
+            if (!MMX64_PTE_IS_VALID(pte, iPML)) {
+                if (iPML == 1) {
+                    pV2P->pte = pte;
+                    pV2P->fPaging = TRUE;
+                }
+                continue;
+            }
+            if (fUserOnly && !(pte & 0x04)) { continue; }            // SUPERVISOR PAGE & USER MODE REQ
+            if (pte & 0x000f000000000000) { continue; }              // RESERVED
+            if ((iPML == 1) || (pte & 0x80) /* PS */) {
+                if (iPML == 4) { continue; }                         // NO SUPPORT IN PML4
+                qwMask = 0xffffffffffffffff << MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML];
+                pV2P->pa = pte & 0x0000fffffffff000 & qwMask;       // MASK AWAY BITS FOR 4kB/2MB/1GB PAGES
+                qwMask = qwMask ^ 0xffffffffffffffff;
+                pV2P->pa = pV2P->pa | (qwMask & pV2P->va);          // FILL LOWER ADDRESS BITS
+                pV2P->fPhys = TRUE;
+                continue;
+            }
         }
         pV2P->paPT = pte & 0x0000fffffffff000;
         fValidNextPT = TRUE;
@@ -268,24 +285,32 @@ BOOL MmX64_Virt2Phys(_In_ VMM_HANDLE H, _In_ QWORD paPT, _In_ BOOL fUserOnly, _I
     QWORD pte, i, qwMask;
     PVMMOB_CACHE_MEM pObPTEs;
     if(iPML == (BYTE)-1) { iPML = 4; }
-    pObPTEs = VmmTlbGetPageTable(H, paPT & 0x0000fffffffff000, FALSE);
-    if(!pObPTEs) { return FALSE; }
-    i = 0x1ff & (va >> MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML]);
-    pte = pObPTEs->pqw[i];
-    Ob_DECREF(pObPTEs);
-    if(!MMX64_PTE_IS_VALID(pte, iPML)) {
-        if(iPML == 1) { *ppa = pte; }                       // NOT VALID
-        return FALSE;
+
+    if (paPT == 888 && pml4) {
+        uintptr_t pml4Index = 0x1FF & (va >> MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML]);
+        pte = pml4[pml4Index];
     }
-    if(fUserOnly && !(pte & 0x04)) { return FALSE; }        // SUPERVISOR PAGE & USER MODE REQ
-    if(pte & 0x000f000000000000) { return FALSE; }          // RESERVED
-    if((iPML == 1) || (pte & 0x80) /* PS */) {
-        if(iPML == 4) { return FALSE; }                     // NO SUPPORT IN PML4
-        qwMask = 0xffffffffffffffff << MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML];
-        *ppa = pte & 0x0000fffffffff000 & qwMask;           // MASK AWAY BITS FOR 4kB/2MB/1GB PAGES
-        qwMask = qwMask ^ 0xffffffffffffffff;
-        *ppa = *ppa | (qwMask & va);                        // FILL LOWER ADDRESS BITS
-        return TRUE;
+	else
+    {
+        pObPTEs = VmmTlbGetPageTable(H, paPT & 0x0000fffffffff000, FALSE);
+        if (!pObPTEs) { return FALSE; }
+        i = 0x1ff & (va >> MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML]);
+        pte = pObPTEs->pqw[i];
+        Ob_DECREF(pObPTEs);
+        if (!MMX64_PTE_IS_VALID(pte, iPML)) {
+            if (iPML == 1) { *ppa = pte; }                       // NOT VALID
+            return FALSE;
+        }
+        if (fUserOnly && !(pte & 0x04)) { return FALSE; }        // SUPERVISOR PAGE & USER MODE REQ
+        if (pte & 0x000f000000000000) { return FALSE; }          // RESERVED
+        if ((iPML == 1) || (pte & 0x80) /* PS */) {
+            if (iPML == 4) { return FALSE; }                     // NO SUPPORT IN PML4
+            qwMask = 0xffffffffffffffff << MMX64_PAGETABLEMAP_PML_REGION_SIZE[iPML];
+            *ppa = pte & 0x0000fffffffff000 & qwMask;           // MASK AWAY BITS FOR 4kB/2MB/1GB PAGES
+            qwMask = qwMask ^ 0xffffffffffffffff;
+            *ppa = *ppa | (qwMask & va);                        // FILL LOWER ADDRESS BITS
+            return TRUE;
+        }
     }
     return MmX64_Virt2Phys(H, pte, fUserOnly, iPML - 1, va, ppa);
 }

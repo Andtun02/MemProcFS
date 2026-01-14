@@ -2047,6 +2047,11 @@ fail:
     return fResult;
 }
 
+VOID VmmSetPml4(ULONG64 qwA)
+{
+    Mmx64_SetPml4(qwA);
+}
+
 _Success_(return)
 BOOL VmmReadAlloc(_In_ VMM_HANDLE H, _In_opt_ PVMM_PROCESS pProcess, _In_ QWORD qwA, _Out_ PBYTE *ppb, _In_ DWORD cb, _In_ QWORD flags)
 {

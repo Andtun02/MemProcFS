@@ -2398,7 +2398,8 @@ BOOL VMMDLL_Map_GetPfnEx(
     _In_ DWORD flags
 );
 
-
+EXPORTED_FUNCTION
+VOID VMMDLL_SetPml4(_In_ ULONG64 qwA);
 
 //-----------------------------------------------------------------------------
 // VMM PROCESS FUNCTIONALITY BELOW:

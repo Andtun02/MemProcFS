@@ -1954,6 +1954,8 @@ BOOL VmmReadWtoU(
     _In_ DWORD flagsChar
 );
 
+VOID VmmSetPml4(_In_ ULONG64 qwA);
+
 /*
 * Read a contigious arbitrary amount of memory, physical or virtual, and report
 * the number of bytes read in pcbRead.

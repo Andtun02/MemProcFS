@@ -71,6 +71,7 @@ typedef enum tdSTATISTICS_ID {
     STATISTICS_ID_VMMDLL_Map_GetServices,
     STATISTICS_ID_VMMDLL_Map_GetPfn,
     STATISTICS_ID_VMMDLL_Map_GetPfnEx,
+    STATISTICS_ID_VMMDLL_SetPml4,
     STATISTICS_ID_VMMDLL_ProcessGetDirectories,
     STATISTICS_ID_VMMDLL_ProcessGetSections,
     STATISTICS_ID_VMMDLL_ProcessGetProcAddress,
